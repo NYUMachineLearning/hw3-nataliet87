@@ -4,6 +4,7 @@ output:
   html_document:
     df_print: paged
 ---
+DUE 10/3
 
 # Lab Section
 
@@ -22,6 +23,7 @@ A smaller k is more biased, but a larger k can be very variable.
 Sample with replacement. Some samples may be represented several times within the boostrap sample, while others may not be represented at all. The samples that are not selected are called out of bag samples. 
 
 Boostrap error rates usually have less uncertainty than k-fold cross validation, but higher bias. 
+
 
 ## Error
 
@@ -116,6 +118,7 @@ library(dplyr)
 library(ggfortify)
 library(glmnet)
 library(tidyverse)
+library(LiblineaR)
 ```
 
 Split data into training and test set
@@ -174,19 +177,34 @@ median(resid(Ridge_regression))
 $$Lasso Regression=\sum_{i=1}^{n}(y_i - w_0 - \sum_{j=1}^{p}w_jx_{ij})^2 + \lambda\sum_{j=1}^p|w_j|$$
 2. Create and train model 
 ```{r}
+ctrl <- trainControl(method = 'boot', 15)
+lasso <- train(Temp ~ Wind + Month, data = train_regression, method = 'lasso', trControl = ctrl)
+
+lasso
 
 ```
 
-```{r}
-```
+
 
 Examine the residuals 
 ```{r}
-
 #plot the predicted values vs the observed values
 
+lasso_pred <- predict(lasso, newdata = test_regression)
+
+plot_lasso_preds <- data.frame(temp_pred = lasso_pred, observed_temp = test_regression$Temp)
+
+ggplot(data = plot_lasso_preds) +
+  geom_point(aes(x=observed_temp, y = temp_pred)) +
+  ggtitle("True Temp vs. Predicted Temp Lasso Regression") +
+  geom_abline(intercept = 0, slope = 1, color = 'blue') +
+  theme_bw()
 
 #median residual value should be close to zero
+
+lasso_resid <- median(resid(lasso))
+print(paste0("Median residual value, ", lasso_resid, ", is close to zero"))
+
 ```
 
 
@@ -267,7 +285,7 @@ set_vers_true_labels <- predictions_actual %>%
 pred_label <- data.frame(prediction = set_vers_true_labels$setosa,
                          label = set_vers_true_labels$Species)
 
-ggplot(pred_label, aes(x = 1:24, y = prediction, color = label))+
+ggplot(pred_label, aes(x = 1:26, y = prediction, color = label))+
   geom_point()
 
 pred <- prediction(set_vers_true_labels$setosa, set_vers_true_labels$Species, 
@@ -343,6 +361,10 @@ logistic_regression <- train(Species~ Sepal.Length, data = train_classifier_log,
                              method = "glm", family= "binomial", trControl = ctrl)
 ```
 
+```{r}
+?roc
+```
+
 
 ```{r}
 logistic_regression
@@ -415,13 +437,142 @@ ggplot(data = test_classifier_log) +
 1. Use the Breast Cancer dataset from the mlbench package, and predict whether the cancer is malignant or benign using one of the algorithms we learned about in class. Give some rationale as to why you chose this algorithm. Plot ROC curves, and confusion matrices. If you are choosing a hyperparameter like K or lambda, explain how and why you chose it. 
 
 ```{r}
-#libra
-#train
-#test
 
-##ctrl <- trainControl()
-## <- train(, data = , method = "", trControl = ctrl)
-## predict(, newdata="")
+# read in data and select for necessary columns
+
+library(mlbench)
+data(BreastCancer)
+
+cancer <- BreastCancer %>% select(-Id)
+head(cancer)
+str(cancer)
+
+```
+
+
+```{r}
+# remove up na values -- only 16 rows with na values so just deleted them from the data
+print(dim(cancer))
+cancer <- na.omit(cancer) 
+print(dim(cancer))
+```
+
+
+```{r}
+# take a look at the features:
+feat1 <- ggplot(data = BreastCancer, aes(x = Cl.thickness, fill = Class)) + 
+  geom_histogram(position="identity", alpha=0.5, stat = "count")  +
+  theme_bw()
+feat2 <- ggplot(data = BreastCancer, aes(x = Cell.size, fill = Class)) + 
+  geom_histogram(position="identity", alpha=0.5, stat = "count")  +
+  theme_bw()
+feat3 <- ggplot(data = BreastCancer, aes(x = Cell.shape, fill = Class)) + 
+  geom_histogram(position="identity", alpha=0.5, stat = "count")  +
+  theme_bw()
+feat4 <- ggplot(data = BreastCancer, aes(x = Marg.adhesion, fill = Class)) + 
+  geom_histogram(position="identity", alpha=0.5, stat = "count")  +
+  theme_bw()
+feat5 <- ggplot(data = BreastCancer, aes(x = Epith.c.size, fill = Class)) + 
+  geom_histogram(position="identity", alpha=0.5, stat = "count")  +
+  theme_bw()
+feat6 <- ggplot(data = BreastCancer, aes(x = Bare.nuclei, fill = Class)) + 
+  geom_histogram(position="identity", alpha=0.5, stat = "count")  +
+  theme_bw()
+feat7 <- ggplot(data = BreastCancer, aes(x = Bl.cromatin, fill = Class)) + 
+  geom_histogram(position="identity", alpha=0.5, stat = "count")  +
+  theme_bw()
+feat8 <- ggplot(data = BreastCancer, aes(x = Normal.nucleoli, fill = Class)) + 
+  geom_histogram(position="identity", alpha=0.5, stat = "count")  +
+  theme_bw()
+feat9 <- ggplot(data = BreastCancer, aes(x = Mitoses, fill = Class)) + 
+  geom_histogram(position="identity", alpha=0.5, stat = "count")  +
+  theme_bw()
+
+
+grid.arrange(feat1, feat2, feat3, feat4, feat5, feat6, feat7, feat8, feat9)
+```
+
+
+```{r}
+# convert ordinal values to numeric to generate correlation matrix
+cancer_num <- cancer 
+cancer_num <- cancer_num %>% transmute(as.numeric(Cl.thickness), as.numeric(Cell.size), as.numeric(Cell.shape),
+                                       as.numeric(Marg.adhesion), as.numeric(Epith.c.size), as.numeric(Bare.nuclei),
+                                       as.numeric(Bl.cromatin), as.numeric(Normal.nucleoli), as.numeric(Mitoses), Class)
+str(cancer_num)
+```
+
+
+```{r}
+# look at correlation matrix of data:
+res <- cor(select(cancer_num, -Class))
+round(res, 2)
+```
+
+
+```{r}
+# Split data into test/train sets
+train_size <- floor(0.75 * nrow(cancer))
+set.seed(543)
+train_pos <- sample(seq_len(nrow(cancer)), size = train_size)
+train_set <- cancer[train_pos,]
+test_set <- cancer[-train_pos,]
+
+tumor_features <- c('Cl.thickness', 'Cell.size', 'Cell.shape', 'Marg.adhesion', 'Epith.c.size', 
+                    'Bare.nuclei', 'Bl.cromatin', 'Normal.nucleoli', 'Mitoses')
+
+dim(train_set)
+dim(test_set)
+```
+
+
+**Selected Logistic regression because it is an effective binary classifier. LDA was not a good option here because all the features aren't normally distributed. Used regularized logistic regression to tune coefficients. Tuning coefficient, lamda, selected by the function**
+```{r}
+# set up crossvalidation with 15 folds:
+ctrl <- trainControl(method = "repeatedcv", repeats = 15,classProbs = T, savePredictions = T)
+
+# initialize and train model
+logistic_regression <- train(Class~., data = train_set, 
+                             method = "regLogistic", family= "binomial", trControl = ctrl, na.action = na.pass)
+```
+
+
+
+```{r}
+# take a look at the model:
+head(logistic_regression$pred)
+```
+```{r}
+# Whats the area under the curve in the training set?
+roc_data <- roc(predictor = logistic_regression$pred$benign, response = logistic_regression$pred$obs)
+roc_data
+```
+
+
+**Testing on independent set:**
+```{r}
+# predict class (benign/malignant) in test set:
+model_predict_class <- predict(logistic_regression, newdata = test_set)
+
+# look at probabilities of classifications in test set:
+model_predict_pred <- predict(logistic_regression, newdata = test_set, type = "prob")
+
+# visualize ROC curve for model applied to test set
+plot(x = roc(predictor = model_predict_pred$benign,
+             response = test_set$Class)$specificities, 
+     y = roc(predictor = model_predict_pred$benign, 
+             response = test_set$Class)$sensitivities,
+     col= "blue", xlim = c(1, 0), type ="l", ylab = "Sensitivity",
+     xlab = "Specificity",
+     main = "ROC curve for regularized logistic regression predicting malignancy")
+legend("bottomright", legend = paste("Benign v Malignant --", 
+                                     roc(predictor = model_predict_pred$benign,
+                                         response = test_set$Class)$auc
+, sep = ""), col = c("blue"), fill = c("blue"))
+
+#confusion matrix
+confusionMatrix(model_predict_class, 
+                reference = test_set$Class)
 ```
 
 
